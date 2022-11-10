@@ -124,17 +124,17 @@ public class CqlCommand implements Callable<Integer> {
             File membersFolder = new File(library.model.modelUrl);
             File[] memberFiles = membersFolder.listFiles();
 
+            LibrarySourceProvider librarySourceProvider = librarySourceProviderIndex.get(library.libraryUrl);
+
+            if (librarySourceProvider == null) {
+                librarySourceProvider = cqlEvaluatorComponent.createLibrarySourceProviderFactory()
+                        .create(new EndpointInfo().setAddress(library.libraryUrl));
+                this.librarySourceProviderIndex.put(library.libraryUrl, librarySourceProvider);
+            }
+
             for (File memberFile : memberFiles) {
                 CqlEvaluatorBuilder cqlEvaluatorBuilder = cqlEvaluatorComponent.createBuilder()
                         .withCqlOptions(cqlOptions);
-
-                LibrarySourceProvider librarySourceProvider = librarySourceProviderIndex.get(library.libraryUrl);
-
-                if (librarySourceProvider == null) {
-                    librarySourceProvider = cqlEvaluatorComponent.createLibrarySourceProviderFactory()
-                            .create(new EndpointInfo().setAddress(library.libraryUrl));
-                    this.librarySourceProviderIndex.put(library.libraryUrl, librarySourceProvider);
-                }
 
                 cqlEvaluatorBuilder.withLibrarySourceProvider(librarySourceProvider);
 
