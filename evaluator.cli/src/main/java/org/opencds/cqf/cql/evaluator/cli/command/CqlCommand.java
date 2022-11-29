@@ -34,7 +34,9 @@ import org.opencds.cqf.cql.evaluator.dagger.DaggerCqlEvaluatorComponent;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import ca.uhn.fhir.context.FhirContext;
 import ca.uhn.fhir.context.FhirVersionEnum;
+import ca.uhn.fhir.parser.IParser;
 import picocli.CommandLine.ArgGroup;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -102,6 +104,9 @@ public class CqlCommand implements Callable<Integer> {
 
     private Map<String, LibrarySourceProvider> librarySourceProviderIndex = new HashMap<>();
     private Map<String, TerminologyProvider> terminologyProviderIndex = new HashMap<>();
+
+    private FhirContext context = FhirContext.forR4();
+    private IParser parser = context.newJsonParser();
 
     @Override
     public Integer call() throws Exception {
@@ -228,9 +233,11 @@ public class CqlCommand implements Callable<Integer> {
             result += "]";
         } else if (value instanceof IBaseResource) {
             IBaseResource resource = (IBaseResource) value;
-            result = resource.fhirType() + (resource.getIdElement() != null && resource.getIdElement().hasIdPart()
-                    ? "(id=" + resource.getIdElement().getIdPart() + ")"
-                    : "");
+            return parser.encodeResourceToString(resource);
+            // result = resource.fhirType()
+            // + (resource.getIdElement() != null && resource.getIdElement().hasIdPart()
+            // ? "(id=" + resource.getIdElement().getIdPart() + ")"
+            // : "");
         } else if (value instanceof IBase) {
             result = ((IBase) value).fhirType();
         } else if (value instanceof IBaseDatatype) {
