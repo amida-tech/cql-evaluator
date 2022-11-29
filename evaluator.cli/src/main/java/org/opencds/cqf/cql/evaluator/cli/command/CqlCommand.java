@@ -1,6 +1,8 @@
 package org.opencds.cqf.cql.evaluator.cli.command;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +32,6 @@ import org.opencds.cqf.cql.evaluator.builder.DataProviderFactory;
 import org.opencds.cqf.cql.evaluator.builder.EndpointInfo;
 import org.opencds.cqf.cql.evaluator.dagger.CqlEvaluatorComponent;
 import org.opencds.cqf.cql.evaluator.dagger.DaggerCqlEvaluatorComponent;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -106,7 +107,10 @@ public class CqlCommand implements Callable<Integer> {
     private Map<String, TerminologyProvider> terminologyProviderIndex = new HashMap<>();
 
     private FhirContext context = FhirContext.forR4();
-    private IParser parser = context.newJsonParser();
+    private IParser parser = context.newJsonParser().setPrettyPrint(true);
+    private ArrayList<String> skippedFields = new ArrayList<>(Arrays.asList("Outpatient Encounters",
+            "Antibiotic Medication", "Comorbid Conditions Diagnosis", "Competing Condition Diagnosis",
+            "Bronchitis Diagnosis"));
 
     @Override
     public Integer call() throws Exception {
@@ -184,15 +188,17 @@ public class CqlCommand implements Callable<Integer> {
 
                 JSONObject json = new JSONObject();
                 for (Map.Entry<String, ExpressionResult> libraryEntry : result.expressionResults.entrySet()) {
-                    json.put(libraryEntry.getKey(), tempConvert(libraryEntry.getValue().value()));
-                    // String entry = tempConvert(libraryEntry.getValue().value());
-                    // if (entry.()) {
-                    // json.put(libraryEntry.getKey(), new JSONArray(entry));
-                    // } else if (entry.startsWith("{")) {
-                    // json.put(libraryEntry.getKey(), new JSONObject(entry));
-                    // } else {
-                    // json.put(libraryEntry.getKey(), entry);
-                    // }
+                    if (skippedFields.contains(libraryEntry.getKey())) {
+                        continue;
+                    }
+                    String value = tempConvert(libraryEntry.getValue().value());
+                    if (value.startsWith("{")) {
+                        json.put(libraryEntry.getKey(), new JSONObject(value));
+                    } else if (value.startsWith("[{") || value.equals("[]")) {
+                        json.put(libraryEntry.getKey(), new JSONArray(value));
+                    } else {
+                        json.put(libraryEntry.getKey(), value);
+                    }
                 }
 
                 String memberId = FilenameUtils.getBaseName(memberFile.toString());
@@ -212,6 +218,13 @@ public class CqlCommand implements Callable<Integer> {
         return 0;
     }
 
+    private boolean checkIBase(Object value) {
+        if (value instanceof IBaseResource || value instanceof IBaseDatatype || value instanceof IBase) {
+            return true;
+        }
+        return false;
+    }
+
     private String tempConvert(Object value) {
         if (value == null) {
             return "null";
@@ -222,7 +235,6 @@ public class CqlCommand implements Callable<Integer> {
             result += "[";
             Iterable<?> values = (Iterable<?>) value;
             for (Object o : values) {
-
                 result += (tempConvert(o) + ", ");
             }
 
@@ -231,17 +243,8 @@ public class CqlCommand implements Callable<Integer> {
             }
 
             result += "]";
-        } else if (value instanceof IBaseResource) {
-            IBaseResource resource = (IBaseResource) value;
-            return parser.encodeResourceToString(resource);
-            // result = resource.fhirType()
-            // + (resource.getIdElement() != null && resource.getIdElement().hasIdPart()
-            // ? "(id=" + resource.getIdElement().getIdPart() + ")"
-            // : "");
-        } else if (value instanceof IBase) {
-            result = ((IBase) value).fhirType();
-        } else if (value instanceof IBaseDatatype) {
-            result = ((IBaseDatatype) value).fhirType();
+        } else if (checkIBase(value)) {
+            result = parser.encodeResourceToString((IBaseResource) value);
         } else {
             result = value.toString();
         }
