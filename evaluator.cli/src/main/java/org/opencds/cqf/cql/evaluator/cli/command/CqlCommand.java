@@ -6,9 +6,11 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.sql.Timestamp;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -22,6 +24,7 @@ import org.hl7.fhir.instance.model.api.IBaseDatatype;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.opencds.cqf.cql.engine.execution.EvaluationResult;
 import org.opencds.cqf.cql.engine.execution.ExpressionResult;
+import org.opencds.cqf.cql.engine.runtime.Interval;
 import org.opencds.cqf.cql.engine.terminology.TerminologyProvider;
 import org.opencds.cqf.cql.evaluator.CqlEvaluator;
 import org.opencds.cqf.cql.evaluator.CqlOptions;
@@ -108,9 +111,15 @@ public class CqlCommand implements Callable<Integer> {
 
     private FhirContext context = FhirContext.forR4();
     private IParser parser = context.newJsonParser().setPrettyPrint(true);
-    private ArrayList<String> skippedFields = new ArrayList<>(Arrays.asList("Outpatient Encounters",
-            "Antibiotic Medication", "Comorbid Conditions Diagnosis", "Competing Condition Diagnosis",
-            "Bronchitis Diagnosis"));
+
+    public static Properties loadProperties() throws IOException {
+        Properties config = new Properties();
+        InputStream is = CqlCommand.class.getClassLoader().getResourceAsStream("filter.properties");
+        config.load(is);
+        is.close();
+        return config;
+
+    }
 
     @Override
     public Integer call() throws Exception {
@@ -129,6 +138,10 @@ public class CqlCommand implements Callable<Integer> {
             cqlOptions.setCqlTranslatorOptions(options);
         }
 
+        Properties filter = loadProperties();
+
+        ArrayList<String> filteredFields = new ArrayList<>(Arrays.asList(
+                filter.getProperty(libraries.get(0).libraryName).split(",")));
         for (LibraryParameter library : libraries) {
             File membersFolder = new File(library.model.modelUrl);
             File[] memberFiles = membersFolder.listFiles();
@@ -188,13 +201,13 @@ public class CqlCommand implements Callable<Integer> {
 
                 JSONObject json = new JSONObject();
                 for (Map.Entry<String, ExpressionResult> libraryEntry : result.expressionResults.entrySet()) {
-                    if (skippedFields.contains(libraryEntry.getKey())) {
+                    if (filteredFields.contains(libraryEntry.getKey())) {
                         continue;
                     }
                     String value = tempConvert(libraryEntry.getValue().value());
                     if (value.startsWith("{")) {
                         json.put(libraryEntry.getKey(), new JSONObject(value));
-                    } else if (value.startsWith("[{") || value.equals("[]")) {
+                    } else if (value.startsWith("[") || value.equals("[]") || value.equals("[\"")) {
                         json.put(libraryEntry.getKey(), new JSONArray(value));
                     } else {
                         json.put(libraryEntry.getKey(), value);
@@ -245,6 +258,11 @@ public class CqlCommand implements Callable<Integer> {
             result += "]";
         } else if (checkIBase(value)) {
             result = parser.encodeResourceToString((IBaseResource) value);
+        } else if (value.toString().startsWith("Interval")) {
+            Interval interval = (Interval) value;
+            result = "{ \"low\":\"" + interval.getLow() + "\", \"high\":\"" + interval.getHigh() +
+                    "\", \"lowClosed\":" + interval.getLowClosed() + ", \"highClosed\": " + interval.getHighClosed()
+                    + " }";
         } else {
             result = value.toString();
         }
