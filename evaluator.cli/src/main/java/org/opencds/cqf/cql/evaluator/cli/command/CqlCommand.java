@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -35,6 +36,7 @@ import org.opencds.cqf.cql.evaluator.builder.DataProviderFactory;
 import org.opencds.cqf.cql.evaluator.builder.EndpointInfo;
 import org.opencds.cqf.cql.evaluator.dagger.CqlEvaluatorComponent;
 import org.opencds.cqf.cql.evaluator.dagger.DaggerCqlEvaluatorComponent;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -140,8 +142,11 @@ public class CqlCommand implements Callable<Integer> {
 
         Properties filter = loadProperties();
 
-        ArrayList<String> filteredFields = new ArrayList<>(Arrays.asList(
-                filter.getProperty(libraries.get(0).libraryName).split(",")));
+        String measure = filter.getProperty(libraries.get(0).libraryName);
+
+        ArrayList<String> filteredFields = measure.length() > 0
+                ? new ArrayList<>(Arrays.asList(measure.split(",")))
+                : new ArrayList<>();
         for (LibraryParameter library : libraries) {
             File membersFolder = new File(library.model.modelUrl);
             File[] memberFiles = membersFolder.listFiles();
@@ -204,13 +209,16 @@ public class CqlCommand implements Callable<Integer> {
                     if (filteredFields.contains(libraryEntry.getKey())) {
                         continue;
                     }
-                    String value = tempConvert(libraryEntry.getValue().value());
-                    if (value.startsWith("{")) {
-                        json.put(libraryEntry.getKey(), new JSONObject(value));
-                    } else if (value.startsWith("[") || value.equals("[]") || value.equals("[\"")) {
-                        json.put(libraryEntry.getKey(), new JSONArray(value));
+                    Object value = libraryEntry.getValue().value();
+                    if (value instanceof Iterable) {
+                        Iterable<?> values = (Iterable<?>) value;
+                        JSONArray array = new JSONArray();
+                        for (Object valueEntry : values) {
+                            array.put(jsonConvert(valueEntry));
+                        }
+                        json.put(libraryEntry.getKey(), array);
                     } else {
-                        json.put(libraryEntry.getKey(), value);
+                        json.put(libraryEntry.getKey(), jsonConvert(value));
                     }
                 }
 
@@ -231,43 +239,21 @@ public class CqlCommand implements Callable<Integer> {
         return 0;
     }
 
-    private boolean checkIBase(Object value) {
-        if (value instanceof IBaseResource || value instanceof IBaseDatatype || value instanceof IBase) {
-            return true;
-        }
-        return false;
-    }
-
-    private String tempConvert(Object value) {
+    private Object jsonConvert(Object value) {
         if (value == null) {
-            return "null";
+            return null;
         }
-
-        String result = "";
-        if (value instanceof Iterable) {
-            result += "[";
-            Iterable<?> values = (Iterable<?>) value;
-            for (Object o : values) {
-                result += (tempConvert(o) + ", ");
-            }
-
-            if (result.length() > 1) {
-                result = result.substring(0, result.length() - 2);
-            }
-
-            result += "]";
-        } else if (checkIBase(value)) {
-            result = parser.encodeResourceToString((IBaseResource) value);
-        } else if (value.toString().startsWith("Interval")) {
+        if (value instanceof IBaseResource || value instanceof IBaseDatatype || value instanceof IBase) {
+            return new JSONObject(parser.encodeResourceToString((IBaseResource) value));
+        } else if (value instanceof Interval) {
             Interval interval = (Interval) value;
-            result = "{ \"low\":\"" + interval.getLow() + "\", \"high\":\"" + interval.getHigh() +
-                    "\", \"lowClosed\":" + interval.getLowClosed() + ", \"highClosed\": " + interval.getHighClosed()
-                    + " }";
-        } else {
-            result = value.toString();
+            Map<String, Object> linkedMap = new LinkedHashMap<>();
+            linkedMap.put("low", interval.getLow().toString());
+            linkedMap.put("high", interval.getHigh().toString());
+            linkedMap.put("lowClosed", interval.getLowClosed());
+            linkedMap.put("highClosed", interval.getHighClosed());
+            return linkedMap;
         }
-
-        return result;
+        return value.toString();
     }
-
 }
