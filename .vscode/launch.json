@@ -186,6 +186,28 @@
             "request": "launch",
             "mainClass": "com.alphora.cql.rest.Main",
             "projectName": "rest"
+        },
+        {
+            "type": "java",
+            "name": "Amida CQL Test",
+            "request": "launch",
+            "mainClass": "org.opencds.cqf.cql.evaluator.cli.Main",
+            "projectName": "evaluator.cli",
+            "args": [
+                "cql",
+                "-fv",
+                "R4",
+                "-op",
+                "C:\\Users\\James\\workspaces\\cql-evaluator\\options\\cql-options.json",
+                "-lu",
+                "C:\\Users\\James\\workspaces\\saraswati-cql-execution\\private\\2022\\1.1.0\\AAB_HEDIS_MY2022-1.1.0\\libraryCql",
+                "-ln",
+                "Amida_AAB_HEDIS_MY2022",
+                "-t",
+                "C:\\Users\\James\\workspaces\\saraswati-cql-execution\\private\\2022\\1.1.0\\AAB_HEDIS_MY2022-1.1.0\\valuesets",
+                "-mu",
+                "fhir-input",
+            ]
         }
     ]
 }

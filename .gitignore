@@ -2,6 +2,9 @@ target
 test-output
 bin/
 
+fhir-input/*
+measure-output/*
+
 .classpath
 .project
 .settings
